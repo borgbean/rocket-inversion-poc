@@ -234,12 +234,18 @@ public class Utils
       return ((ObjectNode) parseJson(json));
    }
 
+
+   //NOTE: objectmapper contruction is VERY expensive, and is thread safe. So, we make it static.
+   private static final ObjectMapper mapper = new ObjectMapper();
+   public static ObjectMapper getObjectMapper() {
+      return mapper;
+   }
+
    public static Object parseJson(String json)
    {
       try
       {
-         ObjectMapper mapper = new ObjectMapper();
-         JsonNode rootNode = mapper.readValue(json, JsonNode.class);
+         JsonNode rootNode = getObjectMapper().readValue(json, JsonNode.class);
 
          Object parsed = map(rootNode);
          return parsed;
