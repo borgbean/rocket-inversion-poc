@@ -16,10 +16,19 @@
 package io.rocketpartners.cloud.demo;
 
 import io.rocketpartners.cloud.action.rest.RestAction;
+import io.rocketpartners.cloud.action.sql.DescribeSqlApiAction;
 import io.rocketpartners.cloud.action.sql.H2SqlDb;
 import io.rocketpartners.cloud.action.sql.SqlDb;
-import io.rocketpartners.cloud.model.Api;
+import io.rocketpartners.cloud.model.*;
+import io.rocketpartners.cloud.service.Chain;
 import io.rocketpartners.cloud.service.Inversion;
+import io.rocketpartners.cloud.service.Service;
+import org.springframework.core.io.ClassPathResource;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 
 /**
  * This simple demo launches an API that exposes SQL database tables 
@@ -58,12 +67,35 @@ public class Demo001SqlDbNorthwind
     */
    public static Api buildApi()
    {
-      return new Api()//
-                      .withName("northwind")//
-                      .withDb(new H2SqlDb("db", "DemoSqlDbNorthwind1.db", Demo001SqlDbNorthwind.class.getResource("northwind.h2.ddl").toString()))//
-                      //.withDb(new SqlDb("db", "YOUR_JDBC_DRIVER", "YOUR_JDBC_URL", "YOUR_JDBC_USERNAME", "YOUR_JDBC_PASSWORD")))//
-                      .withEndpoint("GET,PUT,POST,DELETE", "/*", new RestAction());
-   }
+      return new Api("northwind")//
+                .withName("northwind")
+                .withDb(new H2SqlDb("db", "DemoSqlDbNorthwind1.db", Demo001SqlDbNorthwind.class.getResource("northwind.h2.ddl").toString()))//
+                //.withDb(new SqlDb("db", "YOUR_JDBC_DRIVER", "YOUR_JDBC_URL", "YOUR_JDBC_USERNAME", "YOUR_JDBC_PASSWORD")))//
+                //add endpoint for our 'describe api' call - we prefix table queries below with /data/ to make this work.
+                .withEndpoint("GET", "/describe_api", new DescribeSqlApiAction())
+                //simple action here to just serve the HTML I added to resources, done anonymously
+                .withEndpoint("GET", "/schema_browser", new Action() {
+                    @Override
+                    public void run(Service service, Api api, Endpoint endpoint, Chain chain, Request req, Response res) throws Exception {
+                        res.withStatus(SC.SC_200_OK);
+                        StringBuilder out = new StringBuilder();
+                        try (BufferedReader r = new BufferedReader(new InputStreamReader(new ClassPathResource("io/rocketpartners/cloud/demo/schema_explorer.html").getInputStream()))) {
+                            String line;
+                            while((line=r.readLine()) != null) {
+                                out.append(line);
+                                out.append("\n");
+                            }
+                        }
+
+                        //NOTE: the internal system which routes responses doesn't like me doing this (it logs an error),
+                        //but ideally you'd have this HTML on a static server or something anyway, and it makes it
+                        //easier to run the demo.
+                        res.withJson(null);
+                        res.withOutput(out.toString());
+                    }
+                })
+                .withEndpoint("GET,PUT,POST,DELETE", "/data/*", new RestAction());
+    }
 
    public static void main(String[] args) throws Exception
    {

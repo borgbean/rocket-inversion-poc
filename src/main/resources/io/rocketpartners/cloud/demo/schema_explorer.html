@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=yes, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>schema explorer</title>
+    <style>
+        .flex-container {
+            display: flex;
+            padding: 0;
+            flex-flow: row wrap;
+            margin: 0;
+        }
+
+        .table {
+            overflow: scroll;
+            display: block;
+            height: 50%;
+        }
+
+        .table-1 {
+            flex: 1;
+        }
+
+        .table-2 {
+            flex: 1;
+        }
+
+        .table-3 {
+            width: 100%;
+            flex: 3 auto;
+        }
+
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.1/build/pure-min.css"
+          integrity="sha384-oAOxQR6DkCoMliIh8yFnu25d7Eq/PHS21PClpwjOTeU2jRSq11vu66rf90/cZr47" crossorigin="anonymous">
+</head>
+
+<body>
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+<div id="app" class="flex-container" style="height: 100vh !important;">
+    <table class="table table-1 pure-table">
+        <thead>
+        <tr>
+            <th>Database</th>
+            <th>Table</th>
+            <th>Table size</th>
+            <th>Open</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr v-for="t in tables">
+            <td><span v-if="selectedTable == t">&gt;</span>{{t.database}}</td>
+            <td>{{t.name}}</td>
+            <td>{{t.foundRows}}</td><!--lazy, so empty at first!-->
+            <td>
+                <button @click="selectedTable = t">open</button>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <table class="table table-2 pure-table">
+        <thead>
+        <tr>
+            <th>Column</th>
+            <th>Type</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr v-for="col in (selectedTable || {}).cols">
+            <td>{{col.name}}</td>
+            <td>{{col.type}}</td>
+        </tr>
+        </tbody>
+    </table>
+    <table class="table table-3 pure-table">
+        <thead>
+        <tr>
+            <th v-for="col in (selectedTable || {}).cols">{{col.name}}</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr v-for="row in (selectedTable || {}).data">
+            <td v-for="col in row">{{col}}</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+
+<script>
+    new Vue({
+        el: "#app",
+        data() {
+            return {
+                tables: [],
+                selectedTable: null,
+                page: 1,
+                perPage: 100,
+                subpath: '/northwind' // TODO derive this instead of hardcoding, no time
+            }
+        },
+        methods: {
+            getTables() {
+                fetch(`${this.subpath}/describe_api`)
+                //we get a list of databases, each with a list of tables - flatten to just tables
+                    .then(response => response.json())
+                    //ready to render
+                    .then(tables => {
+                        tables.forEach(table => {
+                            table.foundRows = 0;
+                        });
+                        //populate the UI
+                        this.tables = tables;
+                        //select the first table in the UI
+                        this.selectedTable = tables[0];
+                    })
+                    .catch(err => {
+                        console.error('failed to init', err);
+                        alert('failed to init ' + err);//TODO show in UI
+                    });
+            },
+        },
+        computed: {},
+        watch: {
+            selectedTable(table) {
+                //if user was impatient and clicked twice, just return
+                if (table.fetchDataPromise) {
+                    return;
+                }
+
+                //fetch first 100 rows for this table now
+
+                table.fetchDataPromise =
+                    fetch(`${this.subpath}/data/${table.name}?pageSize=50`)
+                        .then(response => response.json())
+                        .then(response => {
+                            //map columns from the table metadata we pulled earlier
+                            //to the columns in the response.
+                            table.data = response.data.map(row =>
+                                table.cols
+                                    .map(col => row[col.name])
+                            );
+                            //we lazily initialize this now
+                            table.foundRows = response.meta.foundRows;
+                        })
+                        //allow user to retry on failure
+                        .catch(err => {
+                            console.error('failed to fetch table contents', err);
+                            alert('failed to fetch table contents ' + err);
+                            //TODO show in UI
+                            table.fetchDataPromise = null;
+                        });
+            },
+        },
+        created() {
+            this.getTables();
+        },
+    })
+
+
+</script>
+
+</body>
+</html>
