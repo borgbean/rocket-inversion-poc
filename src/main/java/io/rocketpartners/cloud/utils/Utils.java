@@ -102,10 +102,10 @@ public class Utils
 
    public static String toJson(ObjectNode node, boolean pretty, boolean lowercaseNames)
    {
-      try
-      {
-         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-         JsonGenerator json = new JsonFactory().createGenerator(baos);
+      //TODO we should let ObjectMapper generate/recycle the JsonGenerator instances
+      //TODO and reuse the object mapper
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      try (JsonGenerator json = new JsonFactory().createGenerator(baos);) {
          if (pretty)
             json.useDefaultPrettyPrinter();
 
